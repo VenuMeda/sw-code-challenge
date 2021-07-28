@@ -21,7 +21,7 @@ import time
 #         self.end = time()
 #         print(f"{self.description}: {self.end - self.start}")
 #
-
+from pyspark.files import SparkFiles
 from pyspark.sql.session import SparkSession
 
 import logging
@@ -188,16 +188,22 @@ def extract(spark_session):
     return spark_session.read.text(input_files)
 
 
-def ingest(target_dir):
+def ingest(spark, target_dir):
     '''
-    This method gets the list of *.gz log data files from 'data' folder. PySpark,
+    This method gets the list of *.gz log data files from target directory.
+    TODO: Spark can directly extract the files from remote ftp:// servers.
     This method can be further improved to ingest data dynamically from ftp severs
     using a list of URLs and target directory.
 
-    For this excercise, assume the files were already extracted.
+    For this exercise, assume the files were already extracted.
 
     :return: list .gz files
     '''
+
+    # For this excerise, assumed the data file
+    # data_file = 'ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz'
+    # spark.sparkContext.addFile(data_file)
+    # df_data_path = SparkFiles.get('NASA_access_log_Jul95.gz')
 
     import glob
     return glob.glob(target_dir + '/*.gz')
@@ -279,7 +285,8 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     # read log data from folder data.
-    input_files = ingest('data')
+    input_data_dir = 'data'
+    input_files = ingest(spark, input_data_dir)
 
     # Extract, Transform, and Analyze.
     logger.info('Extracting Input log data files {}'.format(input_files))
