@@ -1,0 +1,3 @@
+analyzer/.pytest_cache/
+analyzer/__pycache__/
+data/top*

@@ -1,30 +1,11 @@
 """
 Process Top K hosts or Urls from NASA Web Server Log files
 """
+
 import time
-
-#
-# class Timer(object):
-#     '''
-#     This is a class based context manager to measure execution
-#     time of python code. This is inspired from blog
-#     https://blog.usejournal.com/how-to-create-your-own-timing-context-manager-in-python-a0e944b48cf8
-#     '''
-#
-#     def __init__(self, description):
-#         self.description = description
-#
-#     def __enter__(self):
-#         self.start = time()
-#
-#     def __exit__(self, type, value, traceback):
-#         self.end = time()
-#         print(f"{self.description}: {self.end - self.start}")
-#
-from pyspark.files import SparkFiles
-from pyspark.sql.session import SparkSession
-
 import logging
+
+from pyspark.sql.session import SparkSession
 
 FORMAT = '%(asctime)-15s %(levelname)s %(filename)s %(lineno)d  %(message)s'
 logging.basicConfig(level=logging.INFO, format=FORMAT)
@@ -80,7 +61,8 @@ def check_for_nulls_print_summary(input_df):
     from pyspark.sql.functions import col, sum as spark_sum
 
     def count_null(col_name):
-        return spark_sum(col(col_name).isNull().cast('integer')).alias(col_name)
+        return spark_sum(col(col_name).isNull().cast('integer')).alias(
+            col_name)
 
     # Build up a list of column expressions, one per column.
     exprs = [count_null(col_name) for col_name in input_df.columns]
@@ -112,6 +94,27 @@ def parse_timestamp(text):
     )
 
 
+def drop_rows_with_nulls_any_column(df):
+    from pyspark.sql.functions import col, when
+    logger.info('Discording rows with Null values in all columns in dataframe')
+    return df.na.drop()
+
+
+def replace_empty_string_with_nulls(df):
+    from pyspark.sql.functions import when, col
+    # For all failed or redirection requests, log data file has '-' for content size.
+    # so, let's convert all Nulls to 0 bytes size in the dataframe.
+    logger.info('Replacing empty strings with nulls in all dataframe columns')
+    return df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
+
+
+def replace_null_with_value(df, column_name, value=0):
+    # For all failed or redirection requests, log data file has '-' for content size.
+    # so, let's convert all Nulls to 0 bytes size in the dataframe.
+    logger.info('Replacing Null values with 0 for content_size column')
+    return df.na.fill({column_name: value})
+
+
 def transform_timestamp_day(input_df):
     '''
     This method takes input data frame transform the timestamp column to date and drops
@@ -121,74 +124,69 @@ def transform_timestamp_day(input_df):
     '''
     from pyspark.sql.functions import udf, to_date
 
+    logger.info('Converting timestamp to date format using  to_date() function on DataFrame')
     udf_parse_time = udf(parse_timestamp)
 
     # select all columns and while parsing the timestamp to time and drop the original timestamp.
-    tmp_df = input_df.select('*',
-                             udf_parse_time(input_df['timestamp']).cast('timestamp').alias('time')
-                             ).drop('timestamp')
-    return tmp_df.select('*', to_date('time').alias('date')).drop('time')
+    input_df = input_df.withColumn('timestamp', udf_parse_time(input_df['time']).cast('timestamp')).drop('time')
+
+    return input_df.withColumn('date', to_date('timestamp')).drop('timestamp')
 
 
 def transform(input_df):
     '''
     This method takes input dataframe and parses each line of log data file,
     extract data into host, date, method, endpoint, protocol, status, and content_size columns
-    regex. If the regex did not match, or the specified group did not match, Null is used.
+    regex.
 
     :param input_df: input data frame contains single column with each log entry as row.
     :return: result parsed dataframe after extracting the individual
     columns [host, date, method, endpoint, protocol, status, and content_size]
     '''
-    from pyspark.sql.functions import regexp_extract
-    logger.info('Transforming raw log entries to rows and columns in Dataframe using regex')
-    df = input_df.select(regexp_extract('value', get_host_pattern(), 1).alias('host'),
-                         regexp_extract('value', get_time_stamp_pattern(), 1).alias('timestamp'),
-                         regexp_extract('value', get_method_uri_protocol_pattern(), 1).alias('method'),
-                         regexp_extract('value', get_method_uri_protocol_pattern(), 2).alias('endpoint'),
-                         regexp_extract('value', get_method_uri_protocol_pattern(), 3).alias('protocol'),
-                         regexp_extract('value', get_status_pattern(), 1).cast('integer').alias('status'),
-                         regexp_extract('value', get_content_size_pattern(), 1).cast('integer').alias('content_size'))
 
-    # check if there are any nulls records such as empty  fields
-    # check_for_nulls_print_summary(df)
+    # Step#1 Replace nulls with Zeros for content_size column.
+    input_df = replace_null_with_value(input_df, 'content_size', 0)
 
-    # Step#1 clean status  column and skip rows that have null status.
-    # There are some nulls in status column as input raw log data file
-    # contains an invalid string in status field. Let's filter this out
-    # from final dataframe
-    logger.info('Removing Null values from status column')
-    df = df[df['status'].isNotNull()]
+    # Step#2 Replace empty strings with Nulls as reg_extract() returns
+    # a empty string if regex did not match. RegEx did not match means,
+    # it's corrupted column
+    input_df = replace_empty_string_with_nulls(input_df)
 
-    # Step#2 clean 'content_size'  column and set content size as 0 when it is null.
-    # For all failed or redirection requests, log data file has '-' for content size.
-    # so, let's convert all Nulls to 0 bytes size in the dataframe.
-    logger.info('Replacing Null values with 0 for content_size column')
-    df = df.na.fill({'content_size': 0})
+    # Print summary of columns with null values in the dataframe.
+    check_for_nulls_print_summary(input_df)
 
-    # Now, check again for null data in the transformed dataframe.
-    # check_for_nulls_print_summary(df)
+    # Skip all rows with null column values from the dataframe
+    input_df = drop_rows_with_nulls_any_column(input_df)
 
     # Now, transform timestamp to Date column. Here, our objective of the analysis is to
     # find the top-k visitors, or/and urls per day, data needs to be grouped by date rather
     # than by timestamp.
-    logger.info('Converting timestamp to date format using  to_date() function on DataFrame')
-    df = transform_timestamp_day(df)
-    return df
+
+    return transform_timestamp_day(input_df)
 
 
-def extract(spark_session):
+def extract(input_df):
     """
-    This method extracts the dataframe from the input log data files.
-    The returned dataframe contains one column.
+    This method takes input dataframe and parses single column dataframe to new dataframe with
+    [host,timestamp, method, endpoint, protocol, status, and content_size] columns using regex.
+    If the regex did not match, or the specified group did not match, Null is used.
 
-    :rtype: Spark Dataframe from the input log files.
+    :rtype: Spark Dataframe.
     """
-    # create data from raw log data
-    return spark_session.read.text(input_files)
+    from pyspark.sql.functions import regexp_extract
+    logger.info('Extracting raw log entries to rows and columns in Dataframe using regex')
+
+    return input_df.withColumn('host', regexp_extract('value', get_host_pattern(), 1)) \
+        .withColumn('time', regexp_extract('value', get_time_stamp_pattern(), 1)) \
+        .withColumn('method', regexp_extract('value', get_method_uri_protocol_pattern(), 1)) \
+        .withColumn('endpoint', regexp_extract('value', get_method_uri_protocol_pattern(), 2)) \
+        .withColumn('protocol', regexp_extract('value', get_method_uri_protocol_pattern(), 3)) \
+        .withColumn('status', regexp_extract('value', get_status_pattern(), 1).cast('integer')) \
+        .withColumn('content_size', regexp_extract('value', get_content_size_pattern(), 1).cast('integer')).drop(
+        'value')
 
 
-def ingest(spark, target_dir):
+def ingest(spark_session, target_dir):
     '''
     This method gets the list of *.gz log data files from target directory.
     TODO: Spark can directly extract the files from remote ftp:// servers.
@@ -206,7 +204,8 @@ def ingest(spark, target_dir):
     # df_data_path = SparkFiles.get('NASA_access_log_Jul95.gz')
 
     import glob
-    return glob.glob(target_dir + '/*.gz')
+    input_data_files = glob.glob(target_dir + '/*.gz')
+    return spark_session.read.text(input_data_files)
 
 
 def fetchTopKUrlsPerDay(input_df, top_k, only_2xx_code=False):
@@ -325,3 +324,5 @@ if __name__ == "__main__":
         # top_k_urls.show(top_k_urls.count())
 
     logger.info('PySpark job is completed successfully')
+    # close spark session
+    # spark.close()

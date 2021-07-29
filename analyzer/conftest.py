@@ -1,10 +1,5 @@
 # coding=utf-8
 
-import findspark
-from pandas.util.testing import assert_frame_equal
-
-findspark.init()
-
 import logging
 import pytest
 
@@ -30,7 +25,7 @@ def spark_context(request):
     sc = SparkContext(conf=conf)
     request.addfinalizer(lambda: sc.stop())
 
-    non_verbose_py4j()
+    # non_verbose_py4j()
     return sc
 
 
