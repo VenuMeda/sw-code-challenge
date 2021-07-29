@@ -1,11 +1,82 @@
-import pytest
+"""
+This file contains Test cases of analyzer for processing NASA Web Server Log files
+"""
 
 from . import processor
-
+import pytest
 import pandas as pd
 
-# this allows using the fixture in all tests in this module
+# this allows using the fixture in all test cases in this module
 pytestmark = pytest.mark.usefixtures("spark_session")
+
+
+def test_drop_rows_with_nulls_any_column(spark_session):
+    '''
+    This test if rows with nulls in any column are discorded or not
+
+    :param spark_session:
+    :return:
+    '''
+    print("setting test input")
+
+    test_input = [
+        ('d104.aa.net', 'GET'),
+        (None, 'GET'),
+    ]
+
+    expected_out = [
+        ('d104.aa.net', 'GET')
+    ]
+
+    in_df = spark_session.createDataFrame(data=test_input, schema=['host', 'method'])
+    expect_out_df = spark_session.createDataFrame(data=expected_out, schema=['host', 'method'])
+
+    actual_output_df = processor.drop_rows_with_nulls_any_column(in_df)
+    print("Expected output dataframe")
+    expect_out_df.show(truncate=False)
+    print("Actual output dataframe")
+    actual_output_df.show(truncate=False)
+
+    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
+    expected_output_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
+    pd.testing.assert_frame_equal(expected_output_df, actual_output_df, check_like=True)
+
+
+def test_replace_null_values(spark_session):
+    '''
+    This tests if null values are replaced with Zeors in dataframe
+    :param spark_session:
+    :return:
+    '''
+
+    print("setting test input")
+    test_input = [
+        ('d104.aa.net', 'GET', 2048),
+        (None, 'GET', None),
+        ('120.120.120.120', 'GET', None),
+    ]
+
+    expected_out = [
+        ('d104.aa.net', 'GET', 2048),
+        (None, 'GET', 0),
+        ('120.120.120.120', 'GET', 0),
+
+    ]
+
+    expected_output_df = spark_session.createDataFrame(data=test_input, schema=['host', 'method', 'content_size'])
+    expect_out_df = spark_session.createDataFrame(data=expected_out, schema=['host', 'method', 'content_size'])
+
+    # Test replace nulls with zeros for content_size.
+    actual_output_df = processor.replace_null_with_value(expected_output_df, 'content_size', 0)
+    print("Expected output dataframe")
+    expected_output_df.show(truncate=False)
+    print("Actual output dataframe")
+    actual_output_df.show(truncate=False)
+
+    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
+    expected_output_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
+
+    pd.testing.assert_frame_equal(expected_output_df, actual_output_df, check_like=True)
 
 
 def test_extract(spark_session):
@@ -64,63 +135,6 @@ def test_extract(spark_session):
     pd.testing.assert_frame_equal(expected_output_df, actual_output_df, check_like=True, check_dtype=False)
 
 
-def test_filter_rows_with_nulls(spark_session):
-    print("setting test input")
-
-    test_input = [
-        ('d104.aa.net', 'GET'),
-        (None, 'GET'),
-    ]
-
-    expected_out = [
-        ('d104.aa.net', 'GET')
-    ]
-
-    in_df = spark_session.createDataFrame(data=test_input, schema=['host', 'method'])
-    expect_out_df = spark_session.createDataFrame(data=expected_out, schema=['host', 'method'])
-
-    actual_output_df = processor.drop_rows_with_nulls_any_column(in_df)
-    print("Expected output dataframe")
-    expect_out_df.show(truncate=False)
-    print("Actual output dataframe")
-    actual_output_df.show(truncate=False)
-
-    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
-    expected_output_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
-    pd.testing.assert_frame_equal(expected_output_df, actual_output_df, check_like=True)
-
-
-def test_replace_null_values(spark_session):
-    print("setting test input")
-    test_input = [
-        ('d104.aa.net', 'GET', 2048),
-        (None, 'GET', None),
-        ('120.120.120.120', 'GET', None),
-    ]
-
-    expected_out = [
-        ('d104.aa.net', 'GET', 2048),
-        (None, 'GET', 0),
-        ('120.120.120.120', 'GET', 0),
-
-    ]
-
-    expected_output_df = spark_session.createDataFrame(data=test_input, schema=['host', 'method', 'content_size'])
-    expect_out_df = spark_session.createDataFrame(data=expected_out, schema=['host', 'method', 'content_size'])
-
-    # Test replace nulls with zeros for content_size.
-    actual_output_df = processor.replace_null_with_value(expected_output_df, 'content_size', 0)
-    print("Expected output dataframe")
-    expected_output_df.show(truncate=False)
-    print("Actual output dataframe")
-    actual_output_df.show(truncate=False)
-
-    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
-    expected_output_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
-
-    pd.testing.assert_frame_equal(expected_output_df, actual_output_df, check_like=True)
-
-
 def test_transform(spark_session):
     """ test dataframe is transformed to desired state. Here, desired state is no null values
     for the host, method, endpoint, protocol, status, content_size >=0, and date in Date
@@ -129,7 +143,6 @@ def test_transform(spark_session):
             spark_session: test fixture SparkContext
         """
 
-    from pyspark.sql.types import StringType
     test_input = [
         ('d104.aa.net', '01/Jul/1995:00:00:13 -0400', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048),
         ('d104.aa.net', '01/Jul/1995:00:00:13 -0400', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, None),
@@ -143,9 +156,9 @@ def test_transform(spark_session):
         ('it.is.valid.host.domain.com', '', 'GET', '/', 'HTTP/1.0', 200, 2048),
         ('it.is.valid.host.domain.com', '', '', '', '', 200, 2048),
     ]
-    in_df = spark_session.createDataFrame(test_input,
-                                          ['host', 'time', 'method', 'endpoint', 'protocol', 'status', 'content_size'])
-    in_df.show(truncate=False)
+    test_input_df = spark_session.createDataFrame(test_input,
+                                                  ['host', 'time', 'method', 'endpoint', 'protocol', 'status',
+                                                   'content_size'])
 
     expected_out = [
         ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
@@ -162,13 +175,223 @@ def test_transform(spark_session):
 
     print("Expected output dataframe")
     expect_out_df.show(truncate=False)
-    actual_output_df = processor.transform(in_df)
+
+    actual_output_df = processor.transform(test_input_df)
+
     print("Actual output dataframe")
     actual_output_df.show(truncate=False)
 
     expected_output_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
     actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
     pd.testing.assert_frame_equal(expected_output_df, actual_output_df, check_like=True, check_dtype=False)
+
+
+def test_fetchTopKUrlsPerDay(spark_session):
+    '''
+
+    This method test if top k urls are fetched from test input dataframe
+
+    :param spark_session:
+    :return:
+    '''
+
+    test_input = [
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 512, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/countdown/', 'HTTP/1.0', 400, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/home/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/index/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+    ]
+
+    test_input_df = spark_session.createDataFrame(data=test_input,
+                                                  schema=['host', 'method', 'endpoint', 'protocol', 'status',
+                                                          'content_size', 'date_str'])
+    from pyspark.sql.functions import col
+    from pyspark.sql.functions import to_date
+
+    test_input_df = test_input_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    # build expected output dataframe
+    expected_output = [
+        ('1995-07-01', '/shuttle/countdown/', 4),
+        ('1995-07-01', '/countdown/', 2),
+    ]
+    expect_out_df = spark_session.createDataFrame(data=expected_output,
+                                                  schema=['date_str', 'endpoint', 'hits'])
+    expect_out_df = expect_out_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    print("Expected output dataframe")
+    expect_out_df.show(truncate=False)
+
+    actual_output_df = processor.fetchTopKUrlsPerDay(test_input_df, 2)
+
+    print("Actual output dataframe")
+    actual_output_df.show(truncate=False)
+
+    expect_out_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
+    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
+
+    pd.testing.assert_frame_equal(expect_out_df, actual_output_df, check_like=True, check_dtype=False)
+
+
+def test_fetchTopKUrlsPerDayTieCase(spark_session):
+    '''
+    This method test if top k urls are fetched from test input dataframe when there
+    is tie among the urls. i.e when count matches.
+
+    :param spark_session:
+    :return:
+    '''
+    test_input = [
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 512, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/countdown/', 'HTTP/1.0', 400, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/home/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/index/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/index/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+    ]
+
+    test_input_df = spark_session.createDataFrame(data=test_input,
+                                                  schema=['host', 'method', 'endpoint', 'protocol', 'status',
+                                                          'content_size', 'date_str'])
+    from pyspark.sql.functions import col
+    from pyspark.sql.functions import to_date
+
+    test_input_df = test_input_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    # build expected output dataframe
+    expected_output = [
+        ('1995-07-01', '/shuttle/countdown/', 4),
+        ('1995-07-01', '/countdown/', 2),
+        ('1995-07-01', '/index/', 2),
+    ]
+    expect_out_df = spark_session.createDataFrame(data=expected_output,
+                                                  schema=['date_str', 'endpoint', 'hits'])
+    expect_out_df = expect_out_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    print("Expected output dataframe")
+    expect_out_df.show(truncate=False)
+
+    actual_output_df = processor.fetchTopKUrlsPerDay(test_input_df, 2)
+
+    print("Actual output dataframe")
+    actual_output_df.show(truncate=False)
+
+    expect_out_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
+    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
+
+    pd.testing.assert_frame_equal(expect_out_df, actual_output_df, check_like=True, check_dtype=False)
+
+
+def test_fetchTopKHostsPerDay(spark_session):
+    '''
+    This method test if top k host are fetched from test input dataframe
+    :param spark_session:
+    :return:
+    '''
+    test_input = [
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 512, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 400, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+    ]
+
+    test_input_df = spark_session.createDataFrame(data=test_input,
+                                                  schema=['host', 'method', 'endpoint', 'protocol', 'status',
+                                                          'content_size', 'date_str'])
+    from pyspark.sql.functions import col
+    from pyspark.sql.functions import to_date
+
+    test_input_df = test_input_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    # build expected output dataframe
+    expected_output = [
+        ('1995-07-01', 'd104.aa.net', 4),
+        ('1995-07-01', '120.170.19.95', 3),
+    ]
+    expect_out_df = spark_session.createDataFrame(data=expected_output,
+                                                  schema=['date_str', 'host', 'hits'])
+    expect_out_df = expect_out_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    print("Expected output dataframe")
+    expect_out_df.show(truncate=False)
+
+    actual_output_df = processor.fetchTopKHostsPerDay(test_input_df, 2)
+
+    print("Actual output dataframe")
+    actual_output_df.show(truncate=False)
+
+    expect_out_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
+    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
+
+    pd.testing.assert_frame_equal(expect_out_df, actual_output_df, check_like=True, check_dtype=False)
+
+
+def test_fetchTopKHostsPerDayTieCase(spark_session):
+    '''
+    This method test if top k hosts by count are fetched from test input dataframe when there
+    is tie among the hosts. i.e when count matches.
+    :param spark_session:
+    :return:
+    '''
+
+    test_input = [
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 512, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('d104.aa.net', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 2048, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/index/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 400, 0, '1995-07-01'),
+        ('120.170.19.95', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 300, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('node3.xx.org', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+        ('ip.xx.org', 'GET', '/shuttle/countdown/', 'HTTP/1.0', 200, 0, '1995-07-01'),
+    ]
+
+    test_input_df = spark_session.createDataFrame(data=test_input,
+                                                  schema=['host', 'method', 'endpoint', 'protocol', 'status',
+                                                          'content_size', 'date_str'])
+    from pyspark.sql.functions import col
+    from pyspark.sql.functions import to_date
+
+    test_input_df = test_input_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    # build expected output dataframe
+    expected_output = [
+        ('1995-07-01', 'd104.aa.net', 4),
+        ('1995-07-01', '120.170.19.95', 4),
+        ('1995-07-01', 'node3.xx.org', 2),
+    ]
+    expect_out_df = spark_session.createDataFrame(data=expected_output,
+                                                  schema=['date_str', 'host', 'hits'])
+    expect_out_df = expect_out_df.withColumn('date', to_date(col('date_str'), 'yyyy-MM-dd')).drop('date_str')
+
+    print("Expected output dataframe")
+    expect_out_df.show(truncate=False)
+
+    actual_output_df = processor.fetchTopKHostsPerDay(test_input_df, 2)
+
+    print("Actual output dataframe")
+    actual_output_df.show(truncate=False)
+
+    expect_out_df = get_sorted_data_frame(expect_out_df.toPandas(), expect_out_df.columns)
+    actual_output_df = get_sorted_data_frame(actual_output_df.toPandas(), actual_output_df.columns)
+
+    pd.testing.assert_frame_equal(expect_out_df, actual_output_df, check_like=True, check_dtype=False)
 
 
 def get_sorted_data_frame(data_frame, columns_list):

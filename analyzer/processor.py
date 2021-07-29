@@ -182,8 +182,8 @@ def extract(input_df):
         .withColumn('endpoint', regexp_extract('value', get_method_uri_protocol_pattern(), 2)) \
         .withColumn('protocol', regexp_extract('value', get_method_uri_protocol_pattern(), 3)) \
         .withColumn('status', regexp_extract('value', get_status_pattern(), 1).cast('integer')) \
-        .withColumn('content_size', regexp_extract('value', get_content_size_pattern(), 1).cast('integer')).drop(
-        'value')
+        .withColumn('content_size',
+                    regexp_extract('value', get_content_size_pattern(), 1).cast('integer')).drop('value')
 
 
 def ingest(spark_session, target_dir):
@@ -279,6 +279,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     top_k = args.top
+
+    if top_k < 1:
+        logger.error('Top K value is less than 1, top value is 1 and above')
+        exit(1)
 
     logger.info('Started fetching top {} {} per day from log data files'.format(top_k, args.command))
     spark = get_spark_session()
