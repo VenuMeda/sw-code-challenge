@@ -176,7 +176,7 @@ def extract(input_df):
     from pyspark.sql.functions import regexp_extract
     logger.info('Extracting raw log entries to rows and columns in Dataframe using regex')
 
-    return input_df.withColumn('host', regexp_extract('value', get_host_pattern(), 1)) \
+    df = input_df.withColumn('host', regexp_extract('value', get_host_pattern(), 1)) \
         .withColumn('time', regexp_extract('value', get_time_stamp_pattern(), 1)) \
         .withColumn('method', regexp_extract('value', get_method_uri_protocol_pattern(), 1)) \
         .withColumn('endpoint', regexp_extract('value', get_method_uri_protocol_pattern(), 2)) \
@@ -184,6 +184,7 @@ def extract(input_df):
         .withColumn('status', regexp_extract('value', get_status_pattern(), 1).cast('integer')) \
         .withColumn('content_size',
                     regexp_extract('value', get_content_size_pattern(), 1).cast('integer')).drop('value')
+    return df
 
 
 def ingest(spark_session, target_dir):
@@ -202,9 +203,9 @@ def ingest(spark_session, target_dir):
     # data_file = 'ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz'
     # spark.sparkContext.addFile(data_file)
     # df_data_path = SparkFiles.get('NASA_access_log_Jul95.gz')
-
     import glob
     input_data_files = glob.glob(target_dir + '/*.gz')
+    logger.info('Ingesting Input log data files {}'.format(input_data_files))
     return spark_session.read.text(input_data_files)
 
 
@@ -279,6 +280,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     top_k = args.top
+    input_data_dir = 'data'
 
     if top_k < 1:
         logger.error('Top K value is less than 1, top value is 1 and above')
@@ -287,21 +289,20 @@ if __name__ == "__main__":
     logger.info('Started fetching top {} {} per day from log data files'.format(top_k, args.command))
     spark = get_spark_session()
 
-    # read log data from folder data.
-    input_data_dir = 'data'
-    input_files = ingest(spark, input_data_dir)
+    # read log data from folder.
+    log_df = ingest(spark, input_data_dir)
 
-    # Extract, Transform, and Analyze.
-    logger.info('Extracting Input log data files {}'.format(input_files))
-    log_df = extract(spark)
+    # Extract
+    log_df = extract(log_df)
 
     start = time.time()
+    # transform
     log_df = transform(log_df)
     logger.info('Input log dataframe was transformed to desired state')
     logger.info('Time taken to transform log dataframe is {} seconds'
                 .format((time.time() - start)))
 
-    # Let's cache dataframe after all transformation for further analysis.
+    # Let's cache dataframe for further analysis.
     logger.info('Caching the Dataframe for future analytical queries')
     log_df.cache()
 
