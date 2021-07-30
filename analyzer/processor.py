@@ -192,7 +192,7 @@ def transform(input_df):
     # than by timestamp.
     end_cnt = input_df.count()
     logger.info('Record counts: Before transformation {}, '
-                'after transformation {} , and discorded count{}'.format(start_cnt, end_cnt, (start_cnt - end_cnt)))
+                'after transformation {} , and discorded count {}'.format(start_cnt, end_cnt, (start_cnt - end_cnt)))
 
     return transform_timestamp_day(input_df)
 
