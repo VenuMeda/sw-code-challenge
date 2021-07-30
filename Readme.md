@@ -18,6 +18,41 @@ container when running the container.
 
 *analyzer/conftest.py* contains the required test fixtures for SparkSession and SparkContext.
 
+
+### Software versions
+
+	- PySpark/Spark version- 3.0.2
+	- IDE- PyCharm, Docker
+
+### Steps to run
+
+1. Clone the project from git repo
+
+2. Build the docker container using  ``` $ docker build -t <image-tag>:<version-tag> <dir>```
+   <br/> For instance ``` $ docker build -t serverlog-analyzer:latest ./ ```
+
+3. Run the command to view top 3 hosts per each day on console. <br/> ``` $ docker run --rm serverlog-analyzer:latest --dataset ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz hosts --top 3```  <br/> To view top 3 URLs per each day on console, run  <br/> ``` $ docker run --rm serverlog-analyzer:latest --dataset ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz urls --top 3``` 
+
+4. Analyzer downloads data from the
+   url ``` ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz``` everytime when container is run. To avoid dataset download everytime, mount the local ```data``` directory to the container for caching the data in container. Analyzer doesn't download dataset 
+   to the ```data``` folder on the container if dataset already exists in in ```data```. <br/> If the data is available in ```data``` on local host and is mounted to the container, then ```--dataset <url>``` flag can be skipped. A copy of the data  was already provided in the ```data``` folder.  
+   
+5. Run below command, to view  top 3 urls per each day on console <br/>
+   ``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest urls --top 3``` <br/>  Run below command, to view top 3 hosts per each day on console <br/> ``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest hosts --top 3```
+
+6. Use ```-csv``` or ```--csv``` flag to save the report in CSV format in ```data``` folder. Run docker container using <br/> ``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest --csv urls --top 3```
+
+
+### Step to run unit test using pytest.
+
+"pytest" framework was used for testing. It provides great support for fixtures, reusable fixtures, parametrization in
+fixtures.
+
+1. To run the pytest , run the docker container with below command.
+   <br/> ```$ docker run --rm --entrypoint pytest serverlog-analyzer:latest  -s ``` <br/> ```-s``` at the end turns on verbose mode for pytest. console output
+   is seen for pass and fail tests. 
+   <br/> or to run in silent mode <br/> ```$ docker run --rm --entrypoint pytest serverlog-analyzer:latest``` <br/> logs are only visible for failed tests.
+   
 ### Assumptions/Observations about the input Data.
 
 1. Data is structured in the following format-
@@ -34,45 +69,3 @@ Python regex patterns were used to derive columns from raw log data rows.
    200, 3xx, or 4xx, the host name is considered towards the count of hits from the host. Similar case with URLs too.
 
 3. Input log data is available in Docker container in path '/app/data'
-
-### Software versions
-
-	- PySpark/Spark version- 3.0.2
-	- IDE- PyCharm, Docker
-
-### Steps to run
-
-1. Clone the project from git repo
-
-2. Build the docker container using  ``` $ docker build -t <image-tag>:<version-tag> <dir>```
-   <br/> For instance ``` $ docker build -t serverlog-analyzer:latest ./ ```
-
-3. This analyzer can download the dataset directly from the
-   url ``` ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz```
-   store it in ```data``` folder on the container and run the analysis. Use ```--dataset <url>``` flag. If this dataset
-   url is not provided, mount the ```data``` folder in the current directory to the docker container. A copy of the data
-   was already provided in the ```data``` folder. <br/>
-   ``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest --dataset ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz --csv urls --top 3```
-
-4. Run the docker container using ``` $ docker run --rm -v $(pwd)/data:/app/data <docker image> urls --top <k>```
-   For instance, to fetch top 5 hosts per each day, run the below command
-   <br/>``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest hosts --top 5```
-   To fetch top 3 URLS per each day, run the command. Report will be printed to console.
-   <br/>``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest urls --top 3```
-
-    <br/> 
-   -  Make sure  server log data files are available in local directory. I kept the given 
-     input file NASA_access_log_Jul95.gz in 'data' folder. 
-
-5. If ```-csv``` or ```--csv``` is given, report will stored to the ```data``` folder in CSV format.
-   ``` $ docker run --rm -v $(pwd)/data:/app/data serverlog-analyzer:latest --csv urls --top 3```
-
-### Step to run unit test using pytest.
-
-"pytest" framework was used for testing. It provides great support for fixtures, reusable fixtures, parametrization in
-fixtures.
-
-1. To run the pytest , run the docker container with below command.
-   <br/> ```$ docker run --rm --entrypoint pytest serverlog-analyzer:latest -s ```
-   <br/> or to run in silent mode <br/> ```$ docker run --rm --entrypoint pytest serverlog-analyzer:latest```
-   
