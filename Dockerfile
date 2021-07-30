@@ -1,4 +1,9 @@
-FROM python:3.6-alpine3.10
+#FROM python:3.6-alpine3.10
+#FROM python:3.9.5-alpine3.13
+#RUN apk --update add --no-cache g++
+#RUN pip install pandas
+
+FROM nickgryg/alpine-pandas:latest
 
 ARG SPARK_VERSION=3.0.2
 ARG HADOOP_VERSION_SHORT=3.2
@@ -7,9 +12,9 @@ ARG HADOOP_VERSION=3.2.0
 RUN apk add --no-cache bash openjdk8-jre && \
   apk add --no-cache libc6-compat && \
   ln -s /lib/libc.musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2  && \
-   pip install pyspark p
+   pip install pyspark pytest
 
-RUN pip install pytest pandas
+#RUN pip install pytest
 
 # Download and extract Spark
 RUN wget -qO- https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION_SHORT}.tgz | tar zx -C /opt && \

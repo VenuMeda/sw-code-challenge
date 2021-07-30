@@ -12,6 +12,29 @@ logging.basicConfig(level=logging.INFO, format=FORMAT)
 logger = logging.getLogger(__name__)
 
 
+# Download URL and save to outpath.
+def downloader(url, outpath):
+    # From URL construct the destination path and filename.
+    import os
+    import urllib.request
+    file_name = os.path.basename(urllib.parse.urlparse(url).path)
+    file_path = os.path.join(outpath, file_name)
+
+    from pathlib import Path
+    Path(outpath).mkdir(parents=True, exist_ok=True)
+
+    # Check if the file has already been downloaded.
+    if os.path.exists(file_path):
+        logger.info(('input data file {} already downloaded'.format(file_path)))
+        return
+    # Download and write to file.
+    logger.info(('Downloading the dataset using the url '.format(url)))
+    with urllib.request.urlopen(url, timeout=5) as urldata, \
+            open(file_path, 'wb') as out_file:
+        import shutil
+        shutil.copyfileobj(urldata, out_file)
+
+
 def get_host_pattern():
     '''
 
@@ -68,7 +91,7 @@ def check_for_nulls_print_summary(input_df):
     exprs = [count_null(col_name) for col_name in input_df.columns]
 
     # Run the aggregation. The *exprs converts the list of expressions into variable function arguments.
-    logger.info("Nulls data summary")
+    logger.info("summary of Null values in dataframe")
     input_df.agg(*exprs).show()
 
 
@@ -144,23 +167,32 @@ def transform(input_df):
     columns [host, date, method, endpoint, protocol, status, and content_size]
     '''
 
+    start_cnt = input_df.count()
+
     # Step#1 Replace nulls with Zeros for content_size column.
+    logger.info('Setting Null content sizes to zero')
     input_df = replace_null_with_value(input_df, 'content_size', 0)
 
     # Step#2 Replace empty strings with Nulls as reg_extract() returns
     # a empty string if regex did not match. RegEx did not match means,
     # it's corrupted column
+    logger.info('Replacing empty sting values with Nulls for all columns in dataframe')
     input_df = replace_empty_string_with_nulls(input_df)
 
     # Print summary of columns with null values in the dataframe.
+    logger.info('Replacing empty sting values with Nulls for all columns in dataframe')
     check_for_nulls_print_summary(input_df)
 
     # Skip all rows with null column values from the dataframe
+    logger.info('Dropping rows with nulls in any columns in dataframe')
     input_df = drop_rows_with_nulls_any_column(input_df)
 
     # Now, transform timestamp to Date column. Here, our objective of the analysis is to
     # find the top-k visitors, or/and urls per day, data needs to be grouped by date rather
     # than by timestamp.
+    end_cnt = input_df.count()
+    logger.info('Record counts: Before transformation {}, '
+                'after transformation {} , and discorded count{}'.format(start_cnt, end_cnt, (start_cnt - end_cnt)))
 
     return transform_timestamp_day(input_df)
 
@@ -190,19 +222,11 @@ def extract(input_df):
 def ingest(spark_session, target_dir):
     '''
     This method gets the list of *.gz log data files from target directory.
-    TODO: Spark can directly extract the files from remote ftp:// servers.
-    This method can be further improved to ingest data dynamically from ftp severs
-    using a list of URLs and target directory.
-
     For this exercise, assume the files were already extracted.
 
-    :return: list .gz files
+    :return: dataframe with log lines
     '''
 
-    # For this excerise, assumed the data file
-    # data_file = 'ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz'
-    # spark.sparkContext.addFile(data_file)
-    # df_data_path = SparkFiles.get('NASA_access_log_Jul95.gz')
     import glob
     input_data_files = glob.glob(target_dir + '/*.gz')
     logger.info('Ingesting Input log data files {}'.format(input_data_files))
@@ -275,12 +299,20 @@ if __name__ == "__main__":
     hosts = sub_parser.add_parser('hosts')
     urls = sub_parser.add_parser('urls')
 
-    hosts.add_argument('--top', type=int, required=True)
-    urls.add_argument('--top', type=int, required=True)
+    hosts.add_argument('--top', type=int, required=True,
+                       help='<hosts --top N > where N indicates top hosts. N integer from 1 and above')
+    urls.add_argument('--top', type=int, required=True,
+                      help='<urls --top N> where N indicates top urls. N integer from 1 and above')
+
+    parser.add_argument('--dataset', required=False, action='store',
+                        help='url to the dataset to be downloaded from '
+                             'internet/file system. http:// or ftp:// or file:// ')
+    parser.add_argument('-csv', '--csv', required=False, action='store_true',
+                        help='Stores the analysis report to data folder in CSV format')
 
     args = parser.parse_args()
+
     top_k = args.top
-    input_data_dir = 'data'
 
     if top_k < 1:
         logger.error('Top K value is less than 1, top value is 1 and above')
@@ -290,6 +322,10 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     # read log data from folder.
+    input_data_dir = 'data'
+    if args.dataset:
+        downloader(args.dataset, input_data_dir)
+
     log_df = ingest(spark, input_data_dir)
 
     # Extract
@@ -311,23 +347,28 @@ if __name__ == "__main__":
     if args.command == 'hosts':
         start = time.time()
         top_k_hosts = fetchTopKHostsPerDay(log_df, top_k)
-        logger.info('Storing top {} {} per day data to a CSV file at location {} '.format(top_k, args.command, csv_loc))
-        top_k_hosts.repartition(1).write.csv(path=csv_loc, mode="overwrite", header="true")
+        if args.csv:
+            logger.info(
+                'Storing top {} {} per day data to a CSV file at location {} '.format(top_k, args.command, csv_loc))
+            top_k_hosts.repartition(1).write.csv(path=csv_loc, mode="overwrite", header="true")
         logger.info('Time taken to fetch top {} {} per day data and writing to csv is {} seconds'
                     .format(top_k, args.command, (time.time() - start)))
-        # logger.info('Printing Top {} {} per day data to console'.format(top_k, args.command))
-        # top_k_hosts.show(top_k_hosts.count())
+
+        logger.info('Printing Top {} {} per day data to console'.format(top_k, args.command))
+        top_k_hosts.show(top_k_hosts.count())
 
     if args.command == 'urls':
         start = time.time()
         top_k_urls = fetchTopKUrlsPerDay(log_df, top_k)
-        logger.info('Storing top {} {} per day data to a CSV file at location {} '.format(top_k, args.command, csv_loc))
-        top_k_urls.repartition(1).write.csv(path=csv_loc, mode="overwrite", header="true")
+        if args.csv:
+            logger.info(
+                'Storing top {} {} per day data to a CSV file at location {} '.format(top_k, args.command, csv_loc))
+            top_k_urls.repartition(1).write.csv(path=csv_loc, mode="overwrite", header="true")
         logger.info('Time taken to fetch top {} {} per day data and writing to csv is {} seconds'
                     .format(top_k, args.command, (time.time() - start)))
-        # logger.info('Printing Top {} {} per day data to console'.format(top_k, args.command))
-        # top_k_urls.show(top_k_urls.count())
+        logger.info('Printing Top {} {} per day data to console'.format(top_k, args.command))
+        top_k_urls.show(top_k_urls.count())
 
-    logger.info('PySpark job is completed successfully')
-    # close spark session
-    # spark.close()
+logger.info('PySpark job is completed successfully')
+# close spark session
+# spark.close()
