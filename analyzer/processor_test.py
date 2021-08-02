@@ -528,5 +528,12 @@ def test_downloader_local_files(mock_glob):
     assert err == ''
 
 
+@mock.patch('glob.glob', return_value=[])
+def test_downloader_local_no_files(mock_glob):
+    ok, err = processor.downloader(None, 'data')
+    assert ok == False
+    assert err != ''
+
+
 def get_sorted_data_frame(data_frame, columns_list):
     return data_frame.sort_values(columns_list).reset_index(drop=True)
