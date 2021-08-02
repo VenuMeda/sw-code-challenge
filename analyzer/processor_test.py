@@ -1,6 +1,7 @@
 """
 This file contains Test cases of analyzer for processing NASA Web Server Log files
 """
+from unittest import mock
 
 import pandas as pd
 import pytest
@@ -520,14 +521,12 @@ def test_fetchTopKHostsPerDayWhenLessRecordsThanK(spark_session):
     pd.testing.assert_frame_equal(expect_out_df, actual_output_df, check_like=True, check_dtype=False)
 
 
-def test_downloader_local_files():
-    from unittest.mock import patch
-    with patch('glob.glob') as glob_mock:
-        glob_mock.return_value = ['data/NASA_access_log_Jul95.gz']
-
+@mock.patch('glob.glob', return_value=['data/NASA_access_log_Jul95.gz'])
+def test_downloader_local_files(mock_glob):
     ok, err = processor.downloader(None, 'data')
     assert ok == True
     assert err == ''
+
 
 def get_sorted_data_frame(data_frame, columns_list):
     return data_frame.sort_values(columns_list).reset_index(drop=True)
