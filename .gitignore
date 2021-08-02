@@ -2,3 +2,4 @@
 __pycache__/
 data/top*.*
 data/top*/
+./htmlcov/
