@@ -546,7 +546,7 @@ def test_main_invalid_top_k(mock_argparse):
             return_value=argparse.Namespace(command='hosts', dataset=None, csv=False, top=3))
 @mock.patch('analyzer.processor.ingest')
 @mock.patch('analyzer.processor.get_spark_session')
-def test_main_hosts(mock_session, mock_ingest, mock_argparse, mock_downloader, spark_session):
+def test_main_integrated(mock_session, mock_ingest, mock_argparse, mock_downloader, spark_session):
     from pyspark.sql.types import StringType
     test_input = [
         'd104.aa.net - - [01/Jul/1995:00:00:13 -0400] "GET /shuttle/countdown/ HTTP/1.0" 200 2048',
@@ -557,6 +557,15 @@ def test_main_hosts(mock_session, mock_ingest, mock_argparse, mock_downloader, s
     mock_ingest.return_value = test_input_df
     mock_session.return_value = spark_session
 
+    df = processor.main()
+    assert df == 0
+
+    mock_argparse.return_value = argparse.Namespace(command='urls', dataset=None, csv=False, top=3)
+
+    df = processor.main()
+    assert df == 0
+
+    mock_argparse.return_value = argparse.Namespace(command='urls', dataset=None, csv=True, top=3)
     df = processor.main()
     assert df == 0
 

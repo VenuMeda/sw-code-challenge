@@ -1,6 +1,6 @@
 # Overview
 
-Nasa Web Server Log Analyzer is a python based pyspark Application developed for SecureWorks Coding Challenge. This app
+NASA Web Server Log Analyzer is a python based pyspark Application developed for SecureWorks Coding Challenge. This app
 parses webserver logs, cleans, and builds, caches a dataframe for further analysis. Goal is to
 
 - Fetch top K visitors(hosts) per each day
@@ -8,9 +8,7 @@ parses webserver logs, cleans, and builds, caches a dataframe for further analys
 
 ### About Code Structure
 
-Input ingestion URL - ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz. Here, I assume that input files are already
-extracted from remote ftp server to local directory "data" for this exercise. This data directory is mounted to docker
-container when running the container.
+Input ingestion URL - ftp://ita.ee.lbl.gov/traces/NASA_access_log_Jul95.gz. 
 
 *analyzer/processor.py* This is main entry point. SparkSession object is built here.
 
@@ -77,3 +75,5 @@ Python regex patterns were used to derive columns from raw log data rows.
    200, 3xx, or 4xx, the host name is considered towards the count of hits from the host. Similar case with URLs too.
 
 3. Input log data is available in Docker container in path '/app/data'
+4. --dataset accepts only one URL.
+5. if ```data``` folder has multiple *.gz files, all those files are used for analysis. 

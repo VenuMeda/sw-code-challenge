@@ -423,7 +423,7 @@ def main():
 
     logger.info('PySpark job is completed successfully')
     # close spark session
-    spark.stop()
+    # spark.stop()
     return 0
 
 
