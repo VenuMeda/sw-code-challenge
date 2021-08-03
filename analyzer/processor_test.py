@@ -534,6 +534,13 @@ def test_downloader_local_no_files(mock_glob):
     assert err != ''
 
 
+@mock.patch('argparse.ArgumentParser.parse_args',
+            return_value=argparse.Namespace(command='hosts', dataset=None, csv=False, top=3))
+def test_main_invalid_top_k(mock_argparse):
+    result = processor.main()
+    assert result == 1
+
+
 @mock.patch('analyzer.processor.downloader', return_value=(True, ''))
 @mock.patch('argparse.ArgumentParser.parse_args',
             return_value=argparse.Namespace(command='hosts', dataset=None, csv=False, top=3))
