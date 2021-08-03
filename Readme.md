@@ -76,4 +76,6 @@ Python regex patterns were used to derive columns from raw log data rows.
 
 3. Input log data is available in Docker container in path '/app/data'
 4. --dataset accepts only one URL.
-5. if ```data``` folder has multiple *.gz files, all those files are used for analysis. 
+5. Spark runs in local mode inside the docker container for this exercise.
+
+6. if ```data``` folder has multiple *.gz files, all those files are used for analysis. 
