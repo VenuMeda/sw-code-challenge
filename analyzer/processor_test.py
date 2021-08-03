@@ -1,6 +1,7 @@
 """
 This file contains Test cases of analyzer for processing NASA Web Server Log files
 """
+import argparse
 from unittest import mock
 
 import pandas as pd
@@ -34,7 +35,6 @@ def test_drop_rows_with_nulls_any_column(spark_session):
     :param spark_session:
     :return:
     '''
-    print("setting test input")
 
     test_input = [
         ('d104.aa.net', 'GET'),
@@ -66,7 +66,6 @@ def test_replace_null_values(spark_session):
     :return:
     '''
 
-    print("setting test input")
     test_input = [
         ('d104.aa.net', 'GET', 2048),
         (None, 'GET', None),
@@ -105,7 +104,7 @@ def test_extract(spark_session):
         """
 
     from pyspark.sql.types import StringType
-    print("setting test input")
+
     test_input = [
         'd104.aa.net - - [01/Jul/1995:00:00:13 -0400] "GET /shuttle/countdown/ HTTP/1.0" 200 2048',
         'invalidhost - - [01/Jul/1995:00:00:13 -0400] "GET /shuttle/countdown/ HTTP/1.0" 404 -',
@@ -533,6 +532,26 @@ def test_downloader_local_no_files(mock_glob):
     ok, err = processor.downloader(None, 'data')
     assert ok == False
     assert err != ''
+
+
+@mock.patch('analyzer.processor.downloader', return_value=(True, ''))
+@mock.patch('argparse.ArgumentParser.parse_args',
+            return_value=argparse.Namespace(command='hosts', dataset=None, csv=False, top=3))
+@mock.patch('analyzer.processor.ingest')
+@mock.patch('analyzer.processor.get_spark_session')
+def test_main_hosts(mock_session, mock_ingest, mock_argparse, mock_downloader, spark_session):
+    from pyspark.sql.types import StringType
+    test_input = [
+        'd104.aa.net - - [01/Jul/1995:00:00:13 -0400] "GET /shuttle/countdown/ HTTP/1.0" 200 2048',
+        'host.domain.com   - - [/Jul/1995:00:00:13 -0400] "GET /shuttle/countdown/ HTTP/1.0" 404 -',
+    ]
+
+    test_input_df = spark_session.createDataFrame(test_input, StringType())
+    mock_ingest.return_value = test_input_df
+    mock_session.return_value = spark_session
+
+    df = processor.main()
+    assert df == 0
 
 
 def get_sorted_data_frame(data_frame, columns_list):

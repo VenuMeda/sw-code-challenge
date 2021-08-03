@@ -219,7 +219,7 @@ def transform(input_df):
     logger.info('Replacing empty sting values with Nulls for all columns in dataframe')
     input_df = replace_empty_string_with_nulls(input_df)
 
-    # Print summary of columns with null values in the dataframe.
+    # Summary of columns with null values in the dataframe.
     logger.info('Replacing empty sting values with Nulls for all columns in dataframe')
     null_values_data_summary(input_df)
 
@@ -256,6 +256,7 @@ def extract(input_df):
         .withColumn('status', regexp_extract('value', get_status_pattern(), 1).cast('integer')) \
         .withColumn('content_size',
                     regexp_extract('value', get_content_size_pattern(), 1).cast('integer')).drop('value')
+
     return df
 
 
@@ -270,6 +271,7 @@ def ingest(spark_session, target_dir):
     import glob
     input_data_files = glob.glob(target_dir + '/*.gz')
     logger.info('Ingesting Input log data files {}'.format(input_data_files))
+
     return spark_session.read.text(input_data_files)
 
 
@@ -360,9 +362,8 @@ def parse_args(args):
                              'internet/file system. http:// or ftp:// or file:// ')
     parser.add_argument('-csv', '--csv', required=False, action='store_true',
                         help='Stores the analysis report to data folder in CSV format')
-    args_out = parser.parse_args(args)
-    print(args_out)
-    return args_out
+
+    return parser.parse_args(args)
 
 
 def main():
